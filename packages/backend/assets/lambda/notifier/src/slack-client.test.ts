@@ -11,14 +11,8 @@ const mockCostData: CostData = {
     { serviceName: "Amazon S3", amount: 3.2 },
     { serviceName: "AWS Lambda", amount: 1.0 },
   ],
-  dayBeforeYesterday: [
-    { serviceName: "Amazon EC2", amount: 9.0 },
-    { serviceName: "Amazon S3", amount: 2.8 },
-  ],
-  lastWeekSameDay: [
-    { serviceName: "Amazon EC2", amount: 8.0 },
-    { serviceName: "Amazon S3", amount: 2.5 },
-  ],
+  dayBeforeYesterday: [],
+  lastWeekSameDay: [],
   yesterdayTotal: 14.7,
   dayBeforeYesterdayTotal: 11.8,
   lastWeekSameDayTotal: 10.5,

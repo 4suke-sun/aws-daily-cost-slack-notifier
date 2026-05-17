@@ -1,5 +1,7 @@
 import type { CostData, ServiceCost } from "./cost-explorer-client.js";
 
+const TIMEOUT_MS = 10_000;
+
 export interface SlackMessageOptions {
   costData: CostData;
   exchangeRate: number;
@@ -80,7 +82,7 @@ export async function sendSlackNotification(webhookUrl: string, options: SlackMe
   const blocks = buildSlackBlocks(options);
 
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 10000);
+  const timeout = setTimeout(() => controller.abort(), TIMEOUT_MS);
 
   try {
     const response = await fetch(webhookUrl, {
