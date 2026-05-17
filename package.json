@@ -1,0 +1,45 @@
+{
+  "name": "aws-daily-cost-slack-notifier",
+  "version": "0.1.0",
+  "description": "AWSの日次コストを取得してSlackに通知するLambda関数",
+  "type": "module",
+  "scripts": {
+    "lint": "npm -w packages/backend run lint",
+    "test": "npm -w packages/backend run test",
+    "cdk:lint": "npm -w packages/backend run lint",
+    "cdk:test": "npm -w packages/backend run test",
+    "cdk:deploy": "npm -w packages/backend run cdk deploy -- --all",
+    "assets:lint": "npm -w packages/backend run assets:lint",
+    "assets:test": "npm -w packages/backend run assets:test",
+    "prepare": "husky",
+    "precommit": "lint-staged --concurrent true",
+    "__end__": ""
+  },
+  "author": {
+    "name": "4sukeSuzuki",
+    "email": "sunhelp.bellwood0623@gmail.com"
+  },
+  "license": "UNLICENSED",
+  "private": true,
+  "workspaces": [
+    "packages/backend",
+    "packages/backend/assets/lambda/*"
+  ],
+  "devDependencies": {
+    "@eslint/js": "^9.23.0",
+    "@stylistic/eslint-plugin": "^4.2.0",
+    "eslint": "^9.23.0",
+    "eslint-config-flat-gitignore": "^2.1.0",
+    "eslint-import-resolver-typescript": "^4.2.2",
+    "eslint-plugin-import": "^2.31.0",
+    "eslint-plugin-unused-imports": "^4.1.4",
+    "husky": "^9.1.7",
+    "lint-staged": "^15.5.0",
+    "npm-run-all2": "^7.0.2",
+    "typescript-eslint": "^8.27.0"
+  },
+  "lint-staged": {
+    "packages/backend/{bin,lib,test}/*.ts": "eslint",
+    "packages/backend/assets/**/*.ts": "eslint"
+  }
+}
