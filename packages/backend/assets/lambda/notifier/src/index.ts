@@ -1,6 +1,6 @@
 import { GetParameterCommand, SSMClient } from "@aws-sdk/client-ssm";
 
-import { getDailyCosts } from "./cost-explorer-client.js";
+import { getDailyCosts, getMonthToDateCost, getWeeklyCostHistory } from "./cost-explorer-client.js";
 import { getUsdJpyRate } from "./exchange-rate-client.js";
 import { postToSlack } from "./slack-client.js";
 
@@ -29,9 +29,9 @@ export const handler: ScheduledHandler = async () => {
     const parsedTopN = parseInt(process.env.TOP_N ?? "5", 10);
     const topN = Number.isNaN(parsedTopN) || parsedTopN <= 0 ? 5 : parsedTopN;
 
-    const [webhookUrl, [costResult, jpyRate]] = await Promise.all([
+    const [webhookUrl, [costResult, jpyRate, weeklyHistory, monthToDateAmount]] = await Promise.all([
       getSlackWebhookUrl(ssmParameterPath),
-      Promise.all([getDailyCosts(topN), getUsdJpyRate()]),
+      Promise.all([getDailyCosts(topN), getUsdJpyRate(), getWeeklyCostHistory(), getMonthToDateCost()]),
     ]);
 
     await postToSlack(webhookUrl, {
@@ -43,8 +43,10 @@ export const handler: ScheduledHandler = async () => {
         weekOverWeekChange: s.weekOverWeekChange,
       })),
       totalAmount: costResult.totalAmount,
+      monthToDateAmount,
       currency: costResult.currency,
       jpyRate,
+      weeklyHistory,
     });
 
     console.log("Successfully posted daily cost report to Slack");
