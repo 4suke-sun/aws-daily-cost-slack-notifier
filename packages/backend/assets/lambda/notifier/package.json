@@ -1,0 +1,15 @@
+{
+  "name": "@aws-daily-cost-slack-notifier/notifier",
+  "version": "0.1.0",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "test": "vitest run --silent"
+  },
+  "devDependencies": {
+    "@types/aws-lambda": "^8.10.149",
+    "@types/node": "22.x",
+    "typescript": "^5.8.2",
+    "vitest": "^3.0.9"
+  }
+}
