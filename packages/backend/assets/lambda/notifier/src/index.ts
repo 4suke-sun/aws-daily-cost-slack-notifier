@@ -1,7 +1,4 @@
-import {
-  GetSecretValueCommand,
-  SecretsManagerClient,
-} from "@aws-sdk/client-secrets-manager";
+import { GetParameterCommand, SSMClient } from "@aws-sdk/client-ssm";
 
 import { getDailyCosts } from "./cost-explorer-client.js";
 import { getUsdJpyRate } from "./exchange-rate-client.js";
@@ -9,31 +6,35 @@ import { postToSlack } from "./slack-client.js";
 
 import type { ScheduledHandler } from "aws-lambda";
 
-const secretsClient = new SecretsManagerClient({});
+const ssmClient = new SSMClient({});
+
+async function getSlackWebhookUrl(parameterPath: string): Promise<string> {
+  const response = await ssmClient.send(new GetParameterCommand({
+    Name: parameterPath,
+    WithDecryption: true,
+  }));
+  const value = response.Parameter?.Value;
+  if (!value) {
+    throw new Error("Slack webhook URL parameter is empty");
+  }
+  return value;
+}
 
 export const handler: ScheduledHandler = async () => {
   try {
-    const secretName = process.env.SECRET_NAME;
-    if (!secretName) {
-      throw new Error("SECRET_NAME environment variable is not set");
+    const ssmParameterPath = process.env.SSM_PARAMETER_PATH;
+    if (!ssmParameterPath) {
+      throw new Error("SSM_PARAMETER_PATH environment variable is not set");
     }
     const parsedTopN = parseInt(process.env.TOP_N ?? "5", 10);
     const topN = Number.isNaN(parsedTopN) || parsedTopN <= 0 ? 5 : parsedTopN;
 
-    const secretResponse = await secretsClient.send(
-      new GetSecretValueCommand({ SecretId: secretName }),
-    );
-    const webhookUrl = secretResponse.SecretString;
-    if (!webhookUrl) {
-      throw new Error("Slack webhook URL secret is empty");
-    }
-
-    const [costResult, jpyRate] = await Promise.all([
-      getDailyCosts(topN),
-      getUsdJpyRate(),
+    const [webhookUrl, [costResult, jpyRate]] = await Promise.all([
+      getSlackWebhookUrl(ssmParameterPath),
+      Promise.all([getDailyCosts(topN), getUsdJpyRate()]),
     ]);
 
-    const slackData = {
+    await postToSlack(webhookUrl, {
       date: costResult.date,
       services: costResult.services.map((s) => ({
         name: s.serviceName,
@@ -44,9 +45,7 @@ export const handler: ScheduledHandler = async () => {
       totalAmount: costResult.totalAmount,
       currency: costResult.currency,
       jpyRate,
-    };
-
-    await postToSlack(webhookUrl, slackData);
+    });
 
     console.log("Successfully posted daily cost report to Slack");
   }
