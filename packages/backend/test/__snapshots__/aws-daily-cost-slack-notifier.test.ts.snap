@@ -291,7 +291,7 @@ exports[`AwsDailyCostSlackNotifierStackのデフォルト生成のテスト > Sn
             },
             {
               "id": "AwsSolutions-IAM5",
-              "reason": "ce:GetCostAndUsage does not support resource-level permissions; wildcard resource is required. Secrets Manager grant also uses wildcard for the key.",
+              "reason": "ce:GetCostAndUsage does not support resource-level permissions; wildcard resource is required",
             },
           ],
         },
@@ -301,7 +301,7 @@ exports[`AwsDailyCostSlackNotifierStackのデフォルト生成のテスト > Sn
           "S3Bucket": {
             "Fn::Sub": "cdk-hnb659fds-assets-\${AWS::AccountId}-\${AWS::Region}",
           },
-          "S3Key": "e3f12012a188a98352ac9a4bcb62076dec213123e85f9f9ca39caf5554363488.zip",
+          "S3Key": "03ba9d202f2a592d4e209a6757ef17d0711b0cf68912bab6863bcf7e2bd5d95b.zip",
         },
         "DeadLetterConfig": {
           "TargetArn": {
@@ -313,7 +313,7 @@ exports[`AwsDailyCostSlackNotifierStackのデフォルト生成のテスト > Sn
         },
         "Environment": {
           "Variables": {
-            "SECRET_NAME": "/daily-cost-notifier/slack-webhook-url",
+            "SSM_PARAMETER_PATH": "/daily-cost-notifier/slack-webhook-url",
             "TOP_N": "5",
           },
         },
@@ -340,7 +340,7 @@ exports[`AwsDailyCostSlackNotifierStackのデフォルト生成のテスト > Sn
             },
             {
               "id": "AwsSolutions-IAM5",
-              "reason": "ce:GetCostAndUsage does not support resource-level permissions; wildcard resource is required. Secrets Manager grant also uses wildcard for the key.",
+              "reason": "ce:GetCostAndUsage does not support resource-level permissions; wildcard resource is required",
             },
           ],
         },
@@ -377,7 +377,7 @@ exports[`AwsDailyCostSlackNotifierStackのデフォルト生成のテスト > Sn
             },
             {
               "id": "AwsSolutions-IAM5",
-              "reason": "ce:GetCostAndUsage does not support resource-level permissions; wildcard resource is required. Secrets Manager grant also uses wildcard for the key.",
+              "reason": "ce:GetCostAndUsage does not support resource-level permissions; wildcard resource is required",
             },
           ],
         },
@@ -422,7 +422,7 @@ exports[`AwsDailyCostSlackNotifierStackのデフォルト生成のテスト > Sn
             },
             {
               "id": "AwsSolutions-IAM5",
-              "reason": "ce:GetCostAndUsage does not support resource-level permissions; wildcard resource is required. Secrets Manager grant also uses wildcard for the key.",
+              "reason": "ce:GetCostAndUsage does not support resource-level permissions; wildcard resource is required",
             },
           ],
         },
@@ -441,20 +441,13 @@ exports[`AwsDailyCostSlackNotifierStackのデフォルト生成のテスト > Sn
               },
             },
             {
-              "Action": [
-                "secretsmanager:GetSecretValue",
-                "secretsmanager:DescribeSecret",
-              ],
+              "Action": "ssm:GetParameter",
               "Effect": "Allow",
               "Resource": {
                 "Fn::Join": [
                   "",
                   [
-                    "arn:",
-                    {
-                      "Ref": "AWS::Partition",
-                    },
-                    ":secretsmanager:",
+                    "arn:aws:ssm:",
                     {
                       "Ref": "AWS::Region",
                     },
@@ -462,7 +455,7 @@ exports[`AwsDailyCostSlackNotifierStackのデフォルト生成のテスト > Sn
                     {
                       "Ref": "AWS::AccountId",
                     },
-                    ":secret:/daily-cost-notifier/slack-webhook-url-??????",
+                    ":parameter/daily-cost-notifier/slack-webhook-url",
                   ],
                 ],
               },
