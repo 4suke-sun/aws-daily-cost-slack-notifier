@@ -58,18 +58,21 @@ describe("formatSlackMessage", () => {
 
     const header = result.blocks[0];
     expect(header.type).toBe("header");
+    if (header.type !== "header") throw new Error("unexpected block type");
     expect(header.text.text).toContain("2024-01-15");
 
     const serviceBlocks = result.blocks.slice(1, -1);
     expect(serviceBlocks).toHaveLength(2);
+    if (serviceBlocks[0].type !== "section") throw new Error("unexpected block type");
     expect(serviceBlocks[0].text.text).toContain("Amazon EC2");
     expect(serviceBlocks[0].text.text).toContain("$10.50");
+    if (serviceBlocks[1].type !== "section") throw new Error("unexpected block type");
     expect(serviceBlocks[1].text.text).toContain("Amazon S3");
 
     const contextBlock = result.blocks[result.blocks.length - 1];
     expect(contextBlock.type).toBe("context");
     expect("elements" in contextBlock).toBe(true);
-    const elements = (contextBlock as { elements: { text: string }[] }).elements;
+    const elements = (contextBlock as unknown as { elements: { text: string }[] }).elements;
     expect(elements).toHaveLength(1);
     expect(elements[0].text).toContain("$15.75");
     expect(elements[0].text).toContain("JPY");
@@ -79,10 +82,12 @@ describe("formatSlackMessage", () => {
     const result = formatSlackMessage(sampleData);
 
     const ec2Block = result.blocks[1];
+    if (ec2Block.type !== "section") throw new Error("unexpected block type");
     expect(ec2Block.text.text).toContain("+25.0%");
     expect(ec2Block.text.text).toContain("-10.0%");
 
     const s3Block = result.blocks[2];
+    if (s3Block.type !== "section") throw new Error("unexpected block type");
     expect(s3Block.text.text).toContain("N/A");
     expect(s3Block.text.text).toContain("+50.0%");
   });

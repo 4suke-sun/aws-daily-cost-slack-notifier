@@ -20,8 +20,25 @@ function formatChange(change: number | null): string {
   return `${emoji} ${sign}${change.toFixed(1)}%`;
 }
 
+interface HeaderBlock {
+  type: "header";
+  text: { type: "plain_text"; text: string; emoji: boolean };
+}
+
+interface SectionBlock {
+  type: "section";
+  text: { type: "mrkdwn"; text: string };
+}
+
+interface ContextBlock {
+  type: "context";
+  elements: { type: "mrkdwn"; text: string }[];
+}
+
+type SlackBlock = HeaderBlock | SectionBlock | ContextBlock;
+
 export function formatSlackMessage(data: SlackCostData) {
-  const blocks = [
+  const blocks: SlackBlock[] = [
     {
       type: "header",
       text: {
