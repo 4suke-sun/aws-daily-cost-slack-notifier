@@ -3,7 +3,7 @@ import {
   GetCostAndUsageCommand,
 } from "@aws-sdk/client-cost-explorer";
 
-import type { GetCostAndUsageResponse } from "@aws-sdk/client-cost-explorer";
+import type { Expression, GetCostAndUsageResponse } from "@aws-sdk/client-cost-explorer";
 
 export interface ServiceCost {
   serviceName: string;
@@ -18,6 +18,11 @@ export interface CostResult {
   totalAmount: number;
   services: ServiceCost[];
   currency: string;
+}
+
+export interface DailyTotal {
+  date: string;
+  amount: number;
 }
 
 function formatDate(date: Date): string {
@@ -65,10 +70,20 @@ export async function getDailyCosts(topN = 5): Promise<CostResult> {
   const sameDayLastWeekStr = formatDate(sameDayLastWeek);
   const dayAfterSameDayLastWeekStr = formatDate(dayAfterSameDayLastWeek);
 
+  const excludeCreditRefundFilter: Expression = {
+    Not: {
+      Dimensions: {
+        Key: "RECORD_TYPE",
+        Values: ["Credit", "Refund"],
+      },
+    },
+  };
+
   const baseParams = {
     Granularity: "DAILY" as const,
     Metrics: ["UnblendedCost"],
     GroupBy: [{ Type: "DIMENSION" as const, Key: "SERVICE" }],
+    Filter: excludeCreditRefundFilter,
   };
 
   const [yesterdayResponse, dayBeforeResponse, lastWeekResponse] = await Promise.all([
@@ -136,4 +151,61 @@ export async function getDailyCosts(topN = 5): Promise<CostResult> {
     services: topServices,
     currency,
   };
+}
+
+export async function getWeeklyCostHistory(): Promise<DailyTotal[]> {
+  const today = new Date();
+  const sevenDaysAgo = new Date(today);
+  sevenDaysAgo.setUTCDate(today.getUTCDate() - 7);
+
+  const excludeCreditRefundFilter: Expression = {
+    Not: {
+      Dimensions: {
+        Key: "RECORD_TYPE",
+        Values: ["Credit", "Refund"],
+      },
+    },
+  };
+
+  const response = await client.send(new GetCostAndUsageCommand({
+    TimePeriod: { Start: formatDate(sevenDaysAgo), End: formatDate(today) },
+    Granularity: "DAILY",
+    Metrics: ["UnblendedCost"],
+    Filter: excludeCreditRefundFilter,
+  }));
+
+  const dailyTotals: DailyTotal[] = [];
+  for (const day of response.ResultsByTime ?? []) {
+    const date = day.TimePeriod?.Start ?? "";
+    const amount = parseFloat(day.Total?.UnblendedCost?.Amount ?? "0");
+    dailyTotals.push({ date, amount });
+  }
+
+  return dailyTotals;
+}
+
+export async function getMonthToDateCost(): Promise<number> {
+  const today = new Date();
+  const monthStart = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), 1));
+
+  const excludeCreditRefundFilter: Expression = {
+    Not: {
+      Dimensions: {
+        Key: "RECORD_TYPE",
+        Values: ["Credit", "Refund"],
+      },
+    },
+  };
+
+  const response = await client.send(new GetCostAndUsageCommand({
+    TimePeriod: { Start: formatDate(monthStart), End: formatDate(today) },
+    Granularity: "MONTHLY",
+    Metrics: ["UnblendedCost"],
+    Filter: excludeCreditRefundFilter,
+  }));
+
+  const amount = parseFloat(
+    response.ResultsByTime?.[0]?.Total?.UnblendedCost?.Amount ?? "0",
+  );
+  return amount;
 }

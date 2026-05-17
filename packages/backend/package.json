@@ -15,7 +15,7 @@
     "@eslint/js": "^9.23.0",
     "@types/aws-lambda": "^8.10.149",
     "@types/node": "22.x",
-    "aws-cdk": "2.1005.0",
+    "aws-cdk": "^2.1122.0",
     "esbuild": "^0.25.0",
     "eslint": "^9.23.0",
     "globals": "^16.0.0",
@@ -25,7 +25,7 @@
     "vitest": "^3.0.9"
   },
   "dependencies": {
-    "aws-cdk-lib": "2.184.1",
+    "aws-cdk-lib": "^2.254.0",
     "cdk-nag": "^2.35.49",
     "constructs": "^10.4.2"
   },
