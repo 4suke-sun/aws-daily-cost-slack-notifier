@@ -4,7 +4,8 @@
   "type": "module",
   "private": true,
   "scripts": {
-    "test": "vitest run --silent"
+    "test": "vitest run --silent",
+    "lint": "eslint . --ext ts"
   },
   "dependencies": {
     "@aws-sdk/client-cost-explorer": "^3",

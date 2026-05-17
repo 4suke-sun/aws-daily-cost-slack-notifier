@@ -3,9 +3,7 @@
     "target": "ESNext",
     "module": "ESNext",
     "moduleResolution": "bundler",
-    "lib": [
-      "ESNext"
-    ],
+    "lib": ["ESNext"],
     "declaration": true,
     "strict": true,
     "noUnusedLocals": false,
@@ -17,7 +15,5 @@
     "types": ["node"]
   },
   "include": ["src/**/*.ts", "vitest.config.ts"],
-  "exclude": [
-    "node_modules"
-  ]
+  "exclude": ["node_modules"]
 }
