@@ -8,7 +8,6 @@ import * as iam from "aws-cdk-lib/aws-iam";
 import * as lambda from "aws-cdk-lib/aws-lambda";
 import * as nodejs from "aws-cdk-lib/aws-lambda-nodejs";
 import * as logs from "aws-cdk-lib/aws-logs";
-import * as secretsmanager from "aws-cdk-lib/aws-secretsmanager";
 import * as sqs from "aws-cdk-lib/aws-sqs";
 import { NagSuppressions } from "cdk-nag";
 
@@ -16,15 +15,17 @@ import type { Construct } from "constructs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
+interface AwsDailyCostSlackNotifierStackProps extends cdk.StackProps {
+  ssmParameterPath: string;
+  topN: number;
+  scheduleUtcHour: number;
+}
+
 export class AwsDailyCostSlackNotifierStack extends cdk.Stack {
-  constructor(scope: Construct, id: string, props?: cdk.StackProps) {
+  constructor(scope: Construct, id: string, props: AwsDailyCostSlackNotifierStackProps) {
     super(scope, id, props);
 
-    const secret = secretsmanager.Secret.fromSecretNameV2(
-      this,
-      "SlackWebhookSecret",
-      "/daily-cost-notifier/slack-webhook-url",
-    );
+    const { ssmParameterPath, topN, scheduleUtcHour } = props;
 
     const dlq = new sqs.Queue(this, "NotifierDLQ", {
       encryption: sqs.QueueEncryption.SQS_MANAGED,
@@ -36,8 +37,8 @@ export class AwsDailyCostSlackNotifierStack extends cdk.Stack {
       entry: path.join(__dirname, "../assets/lambda/notifier/src/index.ts"),
       handler: "handler",
       environment: {
-        SECRET_NAME: "/daily-cost-notifier/slack-webhook-url",
-        TOP_N: "5",
+        SSM_PARAMETER_PATH: ssmParameterPath,
+        TOP_N: String(topN),
       },
       timeout: cdk.Duration.seconds(30),
       memorySize: 256,
@@ -51,7 +52,12 @@ export class AwsDailyCostSlackNotifierStack extends cdk.Stack {
       },
     });
 
-    secret.grantRead(fn);
+    fn.addToRolePolicy(new iam.PolicyStatement({
+      actions: ["ssm:GetParameter"],
+      resources: [
+        `arn:aws:ssm:${this.region}:${this.account}:parameter${ssmParameterPath}`,
+      ],
+    }));
 
     fn.addToRolePolicy(new iam.PolicyStatement({
       actions: ["ce:GetCostAndUsage"],
@@ -59,7 +65,7 @@ export class AwsDailyCostSlackNotifierStack extends cdk.Stack {
     }));
 
     const rule = new events.Rule(this, "DailySchedule", {
-      schedule: events.Schedule.cron({ minute: "0", hour: "0", day: "*", month: "*", year: "*" }),
+      schedule: events.Schedule.cron({ minute: "0", hour: String(scheduleUtcHour), day: "*", month: "*", year: "*" }),
     });
     rule.addTarget(new targets.LambdaFunction(fn));
 
@@ -72,9 +78,7 @@ export class AwsDailyCostSlackNotifierStack extends cdk.Stack {
         },
         {
           id: "AwsSolutions-IAM5",
-          reason:
-            "ce:GetCostAndUsage does not support resource-level permissions; wildcard resource is required. "
-            + "Secrets Manager grant also uses wildcard for the key.",
+          reason: "ce:GetCostAndUsage does not support resource-level permissions; wildcard resource is required",
         },
       ],
       true,
