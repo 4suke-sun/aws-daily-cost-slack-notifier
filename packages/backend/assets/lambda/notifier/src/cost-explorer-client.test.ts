@@ -1,6 +1,6 @@
 import { CostExplorerClient, GetCostAndUsageCommand } from "@aws-sdk/client-cost-explorer";
 import { mockClient } from "aws-sdk-client-mock";
-import { afterEach, beforeEach, describe, expect, test } from "vitest";
+import { beforeEach, describe, expect, test } from "vitest";
 
 import { getDailyCosts } from "./cost-explorer-client.js";
 
@@ -24,10 +24,6 @@ function buildResponse(services: Record<string, string>): GetCostAndUsageRespons
 
 beforeEach(() => {
   ceMock.reset();
-});
-
-afterEach(() => {
-  ceMock.restore();
 });
 
 describe("getDailyCosts", () => {

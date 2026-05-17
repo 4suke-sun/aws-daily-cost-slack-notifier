@@ -7,7 +7,9 @@ import * as targets from "aws-cdk-lib/aws-events-targets";
 import * as iam from "aws-cdk-lib/aws-iam";
 import * as lambda from "aws-cdk-lib/aws-lambda";
 import * as nodejs from "aws-cdk-lib/aws-lambda-nodejs";
+import * as logs from "aws-cdk-lib/aws-logs";
 import * as secretsmanager from "aws-cdk-lib/aws-secretsmanager";
+import * as sqs from "aws-cdk-lib/aws-sqs";
 import { NagSuppressions } from "cdk-nag";
 
 import type { Construct } from "constructs";
@@ -24,6 +26,11 @@ export class AwsDailyCostSlackNotifierStack extends cdk.Stack {
       "/daily-cost-notifier/slack-webhook-url",
     );
 
+    const dlq = new sqs.Queue(this, "NotifierDLQ", {
+      encryption: sqs.QueueEncryption.SQS_MANAGED,
+      retentionPeriod: cdk.Duration.days(14),
+    });
+
     const fn = new nodejs.NodejsFunction(this, "NotifierFunction", {
       runtime: lambda.Runtime.NODEJS_22_X,
       entry: path.join(__dirname, "../assets/lambda/notifier/src/index.ts"),
@@ -34,6 +41,8 @@ export class AwsDailyCostSlackNotifierStack extends cdk.Stack {
       },
       timeout: cdk.Duration.seconds(30),
       memorySize: 256,
+      logRetention: logs.RetentionDays.TWO_WEEKS,
+      deadLetterQueue: dlq,
       bundling: {
         format: nodejs.OutputFormat.ESM,
         mainFields: ["module", "main"],
@@ -69,6 +78,16 @@ export class AwsDailyCostSlackNotifierStack extends cdk.Stack {
         },
       ],
       true,
+    );
+
+    NagSuppressions.addResourceSuppressions(
+      dlq,
+      [
+        {
+          id: "AwsSolutions-SQS3",
+          reason: "This queue is itself a dead-letter queue and does not need its own DLQ",
+        },
+      ],
     );
   }
 }

@@ -53,8 +53,6 @@ describe("handler", () => {
   });
 
   afterEach(() => {
-    smMock.restore();
-    ceMock.restore();
     vi.restoreAllMocks();
     vi.unstubAllEnvs();
   });

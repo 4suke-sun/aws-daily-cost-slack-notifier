@@ -45,8 +45,9 @@ function calculateChange(current: number, previous: number): number | null {
   return ((current - previous) / previous) * 100;
 }
 
+const client = new CostExplorerClient({});
+
 export async function getDailyCosts(topN = 5): Promise<CostResult> {
-  const client = new CostExplorerClient({});
 
   const today = new Date();
   const yesterday = new Date(today);

@@ -58,9 +58,11 @@ export function formatSlackMessage(data: SlackCostData) {
   return { blocks };
 }
 
+const SLACK_TIMEOUT_MS = 10_000;
+
 export async function postToSlack(webhookUrl: string, data: SlackCostData): Promise<void> {
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 10000);
+  const timeout = setTimeout(() => controller.abort(), SLACK_TIMEOUT_MS);
 
   try {
     const payload = formatSlackMessage(data);

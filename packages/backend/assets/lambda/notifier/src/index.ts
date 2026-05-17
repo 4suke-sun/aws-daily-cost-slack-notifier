@@ -28,8 +28,10 @@ export const handler: ScheduledHandler = async () => {
       throw new Error("Slack webhook URL secret is empty");
     }
 
-    const costResult = await getDailyCosts(topN);
-    const jpyRate = await getUsdJpyRate();
+    const [costResult, jpyRate] = await Promise.all([
+      getDailyCosts(topN),
+      getUsdJpyRate(),
+    ]);
 
     const slackData = {
       date: costResult.date,
