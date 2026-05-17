@@ -9,6 +9,9 @@ export async function getUsdJpyRate(): Promise<number> {
       "https://api.exchangerate-api.com/v4/latest/USD",
       { signal: controller.signal },
     );
+    if (!response.ok) {
+      throw new Error(`Exchange rate API returned status ${response.status}`);
+    }
     const data = await response.json() as { rates?: { JPY?: number } };
     const rate = data.rates?.JPY;
     if (typeof rate !== "number") {

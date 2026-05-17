@@ -13,8 +13,12 @@ const secretsClient = new SecretsManagerClient({});
 
 export const handler: ScheduledHandler = async () => {
   try {
-    const secretName = process.env.SECRET_NAME ?? "/daily-cost-notifier/slack-webhook-url";
-    const topN = parseInt(process.env.TOP_N ?? "5", 10);
+    const secretName = process.env.SECRET_NAME;
+    if (!secretName) {
+      throw new Error("SECRET_NAME environment variable is not set");
+    }
+    const parsedTopN = parseInt(process.env.TOP_N ?? "5", 10);
+    const topN = Number.isNaN(parsedTopN) || parsedTopN <= 0 ? 5 : parsedTopN;
 
     const secretResponse = await secretsClient.send(
       new GetSecretValueCommand({ SecretId: secretName }),

@@ -41,7 +41,6 @@ export function formatSlackMessage(data: SlackCostData) {
         type: "mrkdwn",
         text: `*${service.name}*\n$${service.amount.toFixed(2)} ${data.currency}`
           + ` | DoD: ${dayChange} | WoW: ${weekChange}`,
-        emoji: true,
       },
     });
   }
@@ -49,12 +48,11 @@ export function formatSlackMessage(data: SlackCostData) {
   const jpyTotal = (data.totalAmount * data.jpyRate).toFixed(0);
   blocks.push({
     type: "context",
-    text: {
+    elements: [{
       type: "mrkdwn",
       text: `Total: $${data.totalAmount.toFixed(2)} ${data.currency}`
         + ` (\u00A5${jpyTotal} JPY @ ${data.jpyRate.toFixed(2)})`,
-      emoji: true,
-    },
+    }],
   });
 
   return { blocks };

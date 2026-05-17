@@ -68,8 +68,11 @@ describe("formatSlackMessage", () => {
 
     const contextBlock = result.blocks[result.blocks.length - 1];
     expect(contextBlock.type).toBe("context");
-    expect(contextBlock.text.text).toContain("$15.75");
-    expect(contextBlock.text.text).toContain("JPY");
+    expect("elements" in contextBlock).toBe(true);
+    const elements = (contextBlock as { elements: { text: string }[] }).elements;
+    expect(elements).toHaveLength(1);
+    expect(elements[0].text).toContain("$15.75");
+    expect(elements[0].text).toContain("JPY");
   });
 
   test("formats positive/negative changes with appropriate indicators", () => {

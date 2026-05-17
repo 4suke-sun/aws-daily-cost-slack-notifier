@@ -49,6 +49,24 @@ describe("getUsdJpyRate", () => {
     expect(warnSpy).toHaveBeenCalled();
   });
 
+  test("returns fallback rate on HTTP error response", async () => {
+    vi.mocked(fetch).mockResolvedValue(
+      new Response("Too Many Requests", { status: 429 }),
+    );
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(
+      // eslint-disable-next-line @typescript-eslint/no-empty-function -- suppress console output in tests
+      () => {},
+    );
+
+    const rate = await getUsdJpyRate();
+
+    expect(rate).toBe(FALLBACK_RATE);
+    expect(warnSpy).toHaveBeenCalledWith(
+      "Failed to fetch exchange rate, using fallback rate:",
+      expect.objectContaining({ message: "Exchange rate API returned status 429" }),
+    );
+  });
+
   test("returns fallback rate on timeout", async () => {
     vi.mocked(fetch).mockRejectedValue(new DOMException("Aborted", "AbortError"));
     const warnSpy = vi.spyOn(console, "warn").mockImplementation(

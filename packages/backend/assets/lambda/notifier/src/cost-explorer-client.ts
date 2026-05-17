@@ -40,7 +40,7 @@ function parseCostsByService(response: GetCostAndUsageResponse): Map<string, num
 
 function calculateChange(current: number, previous: number): number | null {
   if (previous === 0) {
-    return current === 0 ? null : null;
+    return null;
   }
   return ((current - previous) / previous) * 100;
 }

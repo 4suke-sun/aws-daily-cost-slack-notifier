@@ -71,7 +71,7 @@ exports[`AwsDailyCostSlackNotifierStackのデフォルト生成のテスト > Sn
           "S3Bucket": {
             "Fn::Sub": "cdk-hnb659fds-assets-\${AWS::AccountId}-\${AWS::Region}",
           },
-          "S3Key": "83668884af15750053ed065bcca6cbc3783d97152ee1b2604ea9b09a1a8a8f41.zip",
+          "S3Key": "0f3be6aa3075cefcc1157dce184044032102e0ff1ebcd36242d9d8d85c39b162.zip",
         },
         "Environment": {
           "Variables": {
