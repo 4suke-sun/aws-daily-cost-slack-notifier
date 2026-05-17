@@ -9,7 +9,11 @@ describe("AwsDailyCostSlackNotifierStackのデフォルト生成のテスト", (
 
   beforeAll(() => {
     const app = new cdk.App();
-    template = Template.fromStack(new AwsDailyCostSlackNotifierStack(app, "TestStack"));
+    template = Template.fromStack(new AwsDailyCostSlackNotifierStack(app, "TestStack", {
+      ssmParameterPath: "/daily-cost-notifier/slack-webhook-url",
+      topN: 5,
+      scheduleUtcHour: 0,
+    }));
   });
 
   test("Snapshot Test", () => {

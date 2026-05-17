@@ -19,6 +19,9 @@
     "@aws-cdk/core:checkSecretUsage": true,
     "@aws-cdk/core:validationReportJson": true,
     "@aws-cdk/aws-iam:minimizePolicies": true,
-    "@aws-cdk/core:target-partitions": ["aws"]
+    "@aws-cdk/core:target-partitions": ["aws"],
+    "ssmParameterPath": "/daily-cost-notifier/slack-webhook-url",
+    "topN": 5,
+    "scheduleUtcHour": 0
   }
 }
