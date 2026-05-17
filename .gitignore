@@ -1,0 +1,50 @@
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# Node.js
+node_modules
+npm-debug.log*
+
+# TypeScript
+*.js.map
+*.d.ts.map
+dist/
+build/
+
+# AWS CDK
+cdk.out/
+*.asset.json
+
+# Salesforce
+.sf/
+.sfdx/
+
+# VSCode
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+!.vscode/*.code-snippets
+.history/
+*.vsix
+
+# Gitbook / Honkit
+_book/
+*.epub
+*.mobi
+
+# draw.io temp files
+.$*
+
+# Environment
+.env
+.env.local
+.env.*.local
+credentials.json
+
+# Test coverage
+coverage/
