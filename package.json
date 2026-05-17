@@ -19,7 +19,7 @@
     "name": "4sukeSuzuki",
     "email": "sunhelp.bellwood0623@gmail.com"
   },
-  "license": "UNLICENSED",
+  "license": "MIT",
   "private": true,
   "workspaces": [
     "packages/backend",
