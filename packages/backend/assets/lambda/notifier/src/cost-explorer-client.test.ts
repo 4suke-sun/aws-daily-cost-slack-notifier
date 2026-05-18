@@ -90,13 +90,18 @@ describe("getAllCostData", () => {
     vi.setSystemTime(new Date("2024-01-03T12:00:00Z"));
     vi.stubEnv("ENABLE_WEEK_OVER_WEEK", "false");
 
-    // Build 2 days of data (Jan 1 and Jan 2)
+    // queryStart = min(Jan 1, Dec 27) = Dec 27, so we need 7 days of data (Dec 27 - Jan 2)
     const days = [
+      { date: "2023-12-27", services: { "Amazon EC2": "6.00", "Amazon S3": "3.00" } },
+      { date: "2023-12-28", services: { "Amazon EC2": "6.00", "Amazon S3": "3.00" } },
+      { date: "2023-12-29", services: { "Amazon EC2": "6.00", "Amazon S3": "3.00" } },
+      { date: "2023-12-30", services: { "Amazon EC2": "7.00", "Amazon S3": "3.50" } },
+      { date: "2023-12-31", services: { "Amazon EC2": "7.00", "Amazon S3": "3.50" } },
       { date: "2024-01-01", services: { "Amazon EC2": "8.00", "Amazon S3": "4.00" } },
       { date: "2024-01-02", services: { "Amazon EC2": "10.00", "Amazon S3": "5.00" } },
     ];
 
-    const mtdResponse = buildMultiDayResponse("2024-01-01", days);
+    const mtdResponse = buildMultiDayResponse("2023-12-27", days);
     ceMock.on(GetCostAndUsageCommand).resolves(mtdResponse);
 
     const result = await getAllCostData(5);
@@ -104,6 +109,10 @@ describe("getAllCostData", () => {
     expect(result.date).toBe("2024-01-02");
     expect(result.services[0].weekOverWeekChange).toBeNull();
     expect(result.services[1].weekOverWeekChange).toBeNull();
+    // monthToDateAmount only sums days >= 2024-01-01 (Jan 1 + Jan 2)
+    expect(result.monthToDateAmount).toBeCloseTo(27.0); // EC2(8+10) + S3(4+5)
+    // weeklyHistory has 7 entries (Dec 27 - Jan 2)
+    expect(result.weeklyHistory).toHaveLength(7);
     // Only 1 API call
     expect(ceMock.commandCalls(GetCostAndUsageCommand)).toHaveLength(1);
   });
@@ -113,12 +122,17 @@ describe("getAllCostData", () => {
     vi.setSystemTime(new Date("2024-01-03T12:00:00Z"));
     vi.stubEnv("ENABLE_WEEK_OVER_WEEK", "true");
 
-    // MTD response: Jan 1-2
+    // queryStart = min(Jan 1, Dec 27) = Dec 27, so we need 7 days of data (Dec 27 - Jan 2)
     const days = [
+      { date: "2023-12-27", services: { "Amazon EC2": "6.00", "Amazon S3": "3.00" } },
+      { date: "2023-12-28", services: { "Amazon EC2": "6.00", "Amazon S3": "3.00" } },
+      { date: "2023-12-29", services: { "Amazon EC2": "6.00", "Amazon S3": "3.00" } },
+      { date: "2023-12-30", services: { "Amazon EC2": "7.00", "Amazon S3": "3.50" } },
+      { date: "2023-12-31", services: { "Amazon EC2": "7.00", "Amazon S3": "3.50" } },
       { date: "2024-01-01", services: { "Amazon EC2": "8.00", "Amazon S3": "4.00" } },
       { date: "2024-01-02", services: { "Amazon EC2": "10.00", "Amazon S3": "5.00" } },
     ];
-    const mtdResponse = buildMultiDayResponse("2024-01-01", days);
+    const mtdResponse = buildMultiDayResponse("2023-12-27", days);
 
     // Last week response (Dec 26): single day
     const lastWeekResponse: GetCostAndUsageResponse = {
@@ -142,6 +156,8 @@ describe("getAllCostData", () => {
     expect(result.services[0].weekOverWeekChange).toBeCloseTo(100.0);
     // Week-over-week: S3 5/2.5 - 1 = 100%
     expect(result.services[1].weekOverWeekChange).toBeCloseTo(100.0);
+    // monthToDateAmount only sums days >= 2024-01-01
+    expect(result.monthToDateAmount).toBeCloseTo(27.0); // EC2(8+10) + S3(4+5)
     // 2 API calls
     expect(ceMock.commandCalls(GetCostAndUsageCommand)).toHaveLength(2);
   });
@@ -182,15 +198,19 @@ describe("getAllCostData", () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2024-01-01T12:00:00Z"));
 
-    // Today is Jan 1, yesterday is Dec 31
-    // Query will be from Dec 31 (yesterday) to Jan 1 (today)
-
-    // The response has empty groups for yesterday
+    // Today is Jan 1, yesterday is Dec 31.
+    // queryStart = min(Jan 1, Dec 25) = Dec 25, query covers Dec 25 - Jan 1.
+    // Response has 7 days but all with empty groups.
     const emptyResponse: GetCostAndUsageResponse = {
-      ResultsByTime: [{
-        TimePeriod: { Start: "2023-12-31", End: "2024-01-01" },
-        Groups: [],
-      }],
+      ResultsByTime: [
+        { TimePeriod: { Start: "2023-12-25", End: "2023-12-26" }, Groups: [] },
+        { TimePeriod: { Start: "2023-12-26", End: "2023-12-27" }, Groups: [] },
+        { TimePeriod: { Start: "2023-12-27", End: "2023-12-28" }, Groups: [] },
+        { TimePeriod: { Start: "2023-12-28", End: "2023-12-29" }, Groups: [] },
+        { TimePeriod: { Start: "2023-12-29", End: "2023-12-30" }, Groups: [] },
+        { TimePeriod: { Start: "2023-12-30", End: "2023-12-31" }, Groups: [] },
+        { TimePeriod: { Start: "2023-12-31", End: "2024-01-01" }, Groups: [] },
+      ],
     };
 
     ceMock.on(GetCostAndUsageCommand).resolves(emptyResponse);
@@ -200,9 +220,53 @@ describe("getAllCostData", () => {
     expect(result.date).toBe("2023-12-31");
     expect(result.services).toHaveLength(0);
     expect(result.totalAmount).toBe(0);
+    // monthToDateAmount is 0 because no days in the result are >= 2024-01-01
     expect(result.monthToDateAmount).toBe(0);
-    expect(result.weeklyHistory).toHaveLength(1);
+    expect(result.weeklyHistory).toHaveLength(7);
     expect(result.weeklyHistory[0].amount).toBe(0);
+  });
+
+  test("1st of month with real service data: monthToDateAmount is 0, dayOverDayChange is null", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2024-01-01T12:00:00Z"));
+
+    // Today is Jan 1, yesterday is Dec 31.
+    // queryStart = min(Jan 1, Dec 25) = Dec 25, query covers Dec 25 - Jan 1.
+    // All results are from the prior month.
+    const days = [
+      { date: "2023-12-25", services: { "Amazon EC2": "8.00", "Amazon S3": "4.00", "AWS Lambda": "2.00" } },
+      { date: "2023-12-26", services: { "Amazon EC2": "9.00", "Amazon S3": "4.50", "AWS Lambda": "2.50" } },
+      { date: "2023-12-27", services: { "Amazon EC2": "10.00", "Amazon S3": "5.00", "AWS Lambda": "3.00" } },
+      { date: "2023-12-28", services: { "Amazon EC2": "11.00", "Amazon S3": "5.50", "AWS Lambda": "3.50" } },
+      { date: "2023-12-29", services: { "Amazon EC2": "10.00", "Amazon S3": "5.00", "AWS Lambda": "3.00" } },
+      { date: "2023-12-30", services: { "Amazon EC2": "12.00", "Amazon S3": "6.00", "AWS Lambda": "4.00" } },
+      { date: "2023-12-31", services: { "Amazon EC2": "15.00", "Amazon S3": "7.00", "AWS Lambda": "5.00" } },
+    ];
+
+    const mtdResponse = buildMultiDayResponse("2023-12-25", days);
+    ceMock.on(GetCostAndUsageCommand).resolves(mtdResponse);
+
+    const result = await getAllCostData(5);
+
+    // Yesterday is Dec 31 (prior month)
+    expect(result.date).toBe("2023-12-31");
+    // Total amount is yesterday's total (Dec 31): 15 + 7 + 5 = 27
+    expect(result.totalAmount).toBe(27.0);
+    // Services should have real data from yesterday
+    expect(result.services).toHaveLength(3);
+    expect(result.services[0].serviceName).toBe("Amazon EC2");
+    expect(result.services[0].amount).toBe(15.0);
+    // dayOverDayChange compares Dec 31 to Dec 30 (both present in results)
+    // EC2: 15/12 - 1 = 25%
+    expect(result.services[0].dayOverDayChange).toBeCloseTo(25.0);
+    // monthToDateAmount must be 0 since no days belong to January
+    expect(result.monthToDateAmount).toBe(0);
+    // weeklyHistory has 7 entries (Dec 25-31)
+    expect(result.weeklyHistory).toHaveLength(7);
+    expect(result.weeklyHistory[0].date).toBe("2023-12-25");
+    expect(result.weeklyHistory[6].date).toBe("2023-12-31");
+    // Only 1 API call
+    expect(ceMock.commandCalls(GetCostAndUsageCommand)).toHaveLength(1);
   });
 
   test("weeklyHistory returns last 7 days of daily totals", async () => {

@@ -62,9 +62,13 @@ export async function getAllCostData(topN = 5): Promise<AllCostData> {
   const monthStart = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), 1));
   const todayStr = formatDate(today);
   const yesterdayStr = formatDate(yesterday);
+  const monthStartStr = formatDate(monthStart);
 
-  // Ensure yesterday is always included in the query range
-  const queryStart = monthStart <= yesterday ? monthStart : yesterday;
+  // Query start must cover both yesterday and at least 7 days back for weekly history.
+  // Use min(monthStart, 7-days-ago) to ensure we always have up to 7 days of data.
+  const sevenDaysAgo = new Date(today);
+  sevenDaysAgo.setUTCDate(today.getUTCDate() - 7);
+  const queryStart = monthStart <= sevenDaysAgo ? monthStart : sevenDaysAgo;
   const queryStartStr = formatDate(queryStart);
 
   const excludeCreditRefundFilter: Expression = {
@@ -101,7 +105,10 @@ export async function getAllCostData(topN = 5): Promise<AllCostData> {
     ? parseDayCostsByService(mtdResponse, yesterdayIndex)
     : new Map<string, number>();
 
-  // Parse day-before-yesterday's costs
+  // Parse day-before-yesterday's costs.
+  // dayOverDayChange is null only when yesterday is the first entry in the results (index 0),
+  // which should not happen with the 7-day lookback. The Slack formatter displays a dash
+  // character for null changes as a fallback.
   const dayBeforeYesterdayIndex = yesterdayIndex > 0 ? yesterdayIndex - 1 : -1;
   const dayBeforeCosts: Map<string, number> = dayBeforeYesterdayIndex >= 0
     ? parseDayCostsByService(mtdResponse, dayBeforeYesterdayIndex)
@@ -207,8 +214,12 @@ export async function getAllCostData(topN = 5): Promise<AllCostData> {
     weeklyHistory.push({ date, amount: dayTotal });
   }
 
-  // Month-to-date total: sum all days in the results
+  // Month-to-date total: sum only days that belong to the current month (>= monthStart)
   const monthToDateAmount = resultsByTime.reduce((sum, day) => {
+    const dayDate = day.TimePeriod?.Start ?? "";
+    if (dayDate < monthStartStr) {
+      return sum;
+    }
     const groups = day.Groups ?? [];
     return sum + groups.reduce(
       (daySum, g) => daySum + parseFloat(g.Metrics?.UnblendedCost?.Amount ?? "0"), 0,
