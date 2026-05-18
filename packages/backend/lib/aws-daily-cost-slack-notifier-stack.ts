@@ -17,13 +17,14 @@ interface AwsDailyCostSlackNotifierStackProps extends cdk.StackProps {
   ssmParameterPath: string;
   topN: number;
   scheduleUtcHour: number;
+  enableWeekOverWeek: boolean;
 }
 
 export class AwsDailyCostSlackNotifierStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props: AwsDailyCostSlackNotifierStackProps) {
     super(scope, id, props);
 
-    const { ssmParameterPath, topN, scheduleUtcHour } = props;
+    const { ssmParameterPath, topN, scheduleUtcHour, enableWeekOverWeek } = props;
 
     const fn = new nodejs.NodejsFunction(this, "NotifierFunction", {
       runtime: lambda.Runtime.NODEJS_24_X,
@@ -32,6 +33,7 @@ export class AwsDailyCostSlackNotifierStack extends cdk.Stack {
       environment: {
         SSM_PARAMETER_PATH: ssmParameterPath,
         TOP_N: String(topN),
+        ENABLE_WEEK_OVER_WEEK: String(enableWeekOverWeek),
       },
       timeout: cdk.Duration.seconds(30),
       memorySize: 256,

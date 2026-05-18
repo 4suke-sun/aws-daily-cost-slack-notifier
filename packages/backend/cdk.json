@@ -22,6 +22,7 @@
     "@aws-cdk/core:target-partitions": ["aws"],
     "ssmParameterPath": "/daily-cost-notifier/slack-webhook-url",
     "topN": 5,
-    "scheduleUtcHour": 0
+    "scheduleUtcHour": 0,
+    "enableWeekOverWeek": false
   }
 }

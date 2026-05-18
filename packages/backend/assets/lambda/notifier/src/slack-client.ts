@@ -10,6 +10,12 @@ export interface SlackDailyTotal {
   amount: number;
 }
 
+export interface SlackDailyServiceBreakdown {
+  date: string;
+  services: Record<string, number>;
+  total: number;
+}
+
 export interface SlackCostData {
   date: string;
   services: SlackServiceData[];
@@ -18,6 +24,7 @@ export interface SlackCostData {
   currency: string;
   jpyRate: number;
   weeklyHistory: SlackDailyTotal[];
+  weeklyServiceHistory: SlackDailyServiceBreakdown[];
 }
 
 interface HeaderBlock {
@@ -58,39 +65,62 @@ function formatChange(change: number | null): string {
 
 function formatDateJp(dateStr: string): string {
   const [, month, day] = dateStr.split("-");
-  return `${parseInt(month)}/${parseInt(day)}`;
+  return `${Number.parseInt(month)}/${Number.parseInt(day)}`;
 }
 
-function buildChartUrl(history: SlackDailyTotal[]): string {
+// サービス別積み上げ棒グラフ用の色パレット
+const CHART_COLORS = [
+  "rgba(54, 162, 235, 0.8)",   // 青
+  "rgba(255, 99, 132, 0.8)",   // 赤
+  "rgba(75, 192, 192, 0.8)",   // 緑
+  "rgba(153, 102, 255, 0.8)",  // 紫
+  "rgba(255, 159, 64, 0.8)",   // オレンジ
+  "rgba(255, 205, 86, 0.8)",   // 黄
+  "rgba(0, 0, 128, 0.8)",      // ネイビー
+];
+
+function buildStackedChartUrl(
+  history: SlackDailyServiceBreakdown[],
+  topServices: SlackServiceData[],
+): string {
   const labels = history.map((d) => formatDateJp(d.date));
-  const data = history.map((d) => Math.round(d.amount * 100) / 100);
+
+  // topServicesの順序でデータセットを構築（Othersを含む）
+  const serviceNames = topServices.map((s) => s.name);
+
+  const datasets = serviceNames.map((name, idx) => {
+    const data = history.map((day) => {
+      if (name === "Others") {
+        // Others = 日の合計 - topサービス(Others以外)の合計
+        const topSum = serviceNames
+          .filter((n) => n !== "Others")
+          .reduce((sum, n) => sum + (day.services[n] ?? 0), 0);
+        return Math.round((day.total - topSum) * 100) / 100;
+      }
+      return Math.round((day.services[name] ?? 0) * 100) / 100;
+    });
+
+    return {
+      label: name,
+      data,
+      backgroundColor: CHART_COLORS[idx % CHART_COLORS.length],
+    };
+  });
 
   const chartConfig = {
     type: "bar",
-    data: {
-      labels,
-      datasets: [{
-        label: "日別コスト (USD)",
-        data,
-        backgroundColor: "rgba(54, 162, 235, 0.7)",
-        borderColor: "rgba(54, 162, 235, 1)",
-        borderWidth: 1,
-      }],
-    },
+    data: { labels, datasets },
     options: {
       plugins: {
-        title: {
-          display: true,
-          text: "過去7日間のコスト推移",
-          font: { size: 14 },
-        },
-        legend: { display: false },
+        legend: { display: true, position: "top" },
       },
       scales: {
-        y: {
-          beginAtZero: true,
-          title: { display: true, text: "USD" },
-        },
+        xAxes: [{ stacked: true }],
+        yAxes: [{
+          stacked: true,
+          ticks: { beginAtZero: true },
+          scaleLabel: { display: true, labelString: "USD" },
+        }],
       },
     },
   };
@@ -112,12 +142,12 @@ export function formatSlackMessage(data: SlackCostData) {
     },
   });
 
-  // グラフ画像（過去7日間）
-  if (data.weeklyHistory.length > 0) {
+  // サービス別積み上げグラフ（過去7日間）
+  if (data.weeklyServiceHistory.length > 0) {
     blocks.push({
       type: "image",
-      image_url: buildChartUrl(data.weeklyHistory),
-      alt_text: "過去7日間のコスト推移グラフ",
+      image_url: buildStackedChartUrl(data.weeklyServiceHistory, data.services),
+      alt_text: "過去7日間のサービス別コスト推移グラフ",
     });
   }
 
