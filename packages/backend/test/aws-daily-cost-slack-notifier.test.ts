@@ -13,6 +13,7 @@ describe("AwsDailyCostSlackNotifierStackのデフォルト生成のテスト", (
       ssmParameterPath: "/daily-cost-notifier/slack-webhook-url",
       topN: 5,
       scheduleUtcHour: 0,
+      enableWeekOverWeek: false,
     }));
   });
 

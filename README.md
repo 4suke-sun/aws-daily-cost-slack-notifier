@@ -48,7 +48,7 @@ EventBridge Rule (UTC 0:00)
         │
         ▼
     Lambda (Node.js 24)
-        ├──▶ Cost Explorer API       (前日・前々日・前週同曜日・過去7日・月累計のコスト取得)
+        ├──▶ Cost Explorer API       (月初〜前日の日次コストを1回で取得、月初1-7日の前週比は追加1回)
         ├──▶ 外部為替 API            (USD/JPY レート取得、失敗時はフォールバック)
         ├──▶ QuickChart.io           (コスト推移グラフ画像の生成)
         ├──▶ SSM Parameter Store     (Slack Webhook URL の取得)
@@ -115,6 +115,7 @@ aws ssm put-parameter \
 | `ssmParameterPath` | Slack Webhook URL の SSM パス | `/daily-cost-notifier/slack-webhook-url` |
 | `topN` | 通知するサービスの上位件数 | `5` |
 | `scheduleUtcHour` | 実行時刻（UTC 時、JST = UTC + 9） | `0`（= JST 9:00） |
+| `enableWeekOverWeek` | 前週比を月初1-7日も取得するか | `false` |
 
 ## デプロイ手順
 
@@ -127,6 +128,9 @@ npm run cdk:deploy
 
 # パラメータを上書きしてデプロイ
 npm run cdk:deploy -- -c topN=10 -c scheduleUtcHour=1 -c ssmParameterPath=/prod/slack-webhook
+
+# 前週比を1〜7日も出したい場合
+npm run cdk:deploy -- -c enableWeekOverWeek=true
 
 # スタックの削除
 npm run cdk:destroy

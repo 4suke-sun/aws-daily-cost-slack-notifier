@@ -13,16 +13,25 @@ export interface ServiceCost {
   weekOverWeekChange: number | null;
 }
 
-export interface CostResult {
+export interface DailyTotal {
+  date: string;
+  amount: number;
+}
+
+export interface DailyServiceBreakdown {
+  date: string;
+  services: Map<string, number>;
+  total: number;
+}
+
+export interface AllCostData {
   date: string;
   totalAmount: number;
   services: ServiceCost[];
   currency: string;
-}
-
-export interface DailyTotal {
-  date: string;
-  amount: number;
+  weeklyHistory: DailyTotal[];
+  weeklyServiceHistory: DailyServiceBreakdown[];
+  monthToDateAmount: number;
 }
 
 function formatDate(date: Date): string {
@@ -32,17 +41,6 @@ function formatDate(date: Date): string {
   return `${year}-${month}-${day}`;
 }
 
-function parseCostsByService(response: GetCostAndUsageResponse): Map<string, number> {
-  const costs = new Map<string, number>();
-  const groups = response.ResultsByTime?.[0]?.Groups ?? [];
-  for (const group of groups) {
-    const serviceName = group.Keys?.[0] ?? "Unknown";
-    const amount = parseFloat(group.Metrics?.UnblendedCost?.Amount ?? "0");
-    costs.set(serviceName, amount);
-  }
-  return costs;
-}
-
 function calculateChange(current: number, previous: number): number | null {
   if (previous === 0) {
     return null;
@@ -50,25 +48,34 @@ function calculateChange(current: number, previous: number): number | null {
   return ((current - previous) / previous) * 100;
 }
 
+function parseDayCostsByService(response: GetCostAndUsageResponse, dayIndex: number): Map<string, number> {
+  const costs = new Map<string, number>();
+  const groups = response.ResultsByTime?.[dayIndex]?.Groups ?? [];
+  for (const group of groups) {
+    const serviceName = group.Keys?.[0] ?? "Unknown";
+    const amount = Number.parseFloat(group.Metrics?.UnblendedCost?.Amount ?? "0");
+    costs.set(serviceName, amount);
+  }
+  return costs;
+}
+
 const client = new CostExplorerClient({});
 
-export async function getDailyCosts(topN = 5): Promise<CostResult> {
-
+export async function getAllCostData(topN = 5): Promise<AllCostData> {
   const today = new Date();
   const yesterday = new Date(today);
   yesterday.setUTCDate(today.getUTCDate() - 1);
-  const dayBeforeYesterday = new Date(today);
-  dayBeforeYesterday.setUTCDate(today.getUTCDate() - 2);
-  const sameDayLastWeek = new Date(today);
-  sameDayLastWeek.setUTCDate(today.getUTCDate() - 8);
-  const dayAfterSameDayLastWeek = new Date(today);
-  dayAfterSameDayLastWeek.setUTCDate(today.getUTCDate() - 7);
 
+  const monthStart = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), 1));
   const todayStr = formatDate(today);
   const yesterdayStr = formatDate(yesterday);
-  const dayBeforeYesterdayStr = formatDate(dayBeforeYesterday);
-  const sameDayLastWeekStr = formatDate(sameDayLastWeek);
-  const dayAfterSameDayLastWeekStr = formatDate(dayAfterSameDayLastWeek);
+  const monthStartStr = formatDate(monthStart);
+
+  // クエリ開始日: 月初と7日前の早い方を使い、常に7日分のデータを確保
+  const sevenDaysAgo = new Date(today);
+  sevenDaysAgo.setUTCDate(today.getUTCDate() - 7);
+  const queryStart = monthStart <= sevenDaysAgo ? monthStart : sevenDaysAgo;
+  const queryStartStr = formatDate(queryStart);
 
   const excludeCreditRefundFilter: Expression = {
     Not: {
@@ -86,43 +93,92 @@ export async function getDailyCosts(topN = 5): Promise<CostResult> {
     Filter: excludeCreditRefundFilter,
   };
 
-  const [yesterdayResponse, dayBeforeResponse, lastWeekResponse] = await Promise.all([
-    client.send(new GetCostAndUsageCommand({
-      ...baseParams,
-      TimePeriod: { Start: yesterdayStr, End: todayStr },
-    })),
-    client.send(new GetCostAndUsageCommand({
-      ...baseParams,
-      TimePeriod: { Start: dayBeforeYesterdayStr, End: yesterdayStr },
-    })),
-    client.send(new GetCostAndUsageCommand({
-      ...baseParams,
-      TimePeriod: { Start: sameDayLastWeekStr, End: dayAfterSameDayLastWeekStr },
-    })),
-  ]);
+  // 1回のAPIコールで月初(or 7日前)〜今日までのデータを取得
+  const mtdResponse = await client.send(new GetCostAndUsageCommand({
+    ...baseParams,
+    TimePeriod: { Start: queryStartStr, End: todayStr },
+  }));
 
-  const yesterdayCosts = parseCostsByService(yesterdayResponse);
-  const dayBeforeCosts = parseCostsByService(dayBeforeResponse);
-  const lastWeekCosts = parseCostsByService(lastWeekResponse);
+  const resultsByTime = mtdResponse.ResultsByTime ?? [];
 
-  const currency = yesterdayResponse.ResultsByTime?.[0]?.Groups?.[0]
-    ?.Metrics?.UnblendedCost?.Unit ?? "USD";
+  // 昨日のインデックスを特定
+  const yesterdayIndex = resultsByTime.findIndex(
+    (r) => r.TimePeriod?.Start === yesterdayStr,
+  );
 
+  // 昨日のサービス別コスト
+  const yesterdayCosts: Map<string, number> = yesterdayIndex >= 0
+    ? parseDayCostsByService(mtdResponse, yesterdayIndex)
+    : new Map<string, number>();
+
+  // 一昨日のサービス別コスト（前日比計算用）
+  const dayBeforeYesterdayIndex = yesterdayIndex > 0 ? yesterdayIndex - 1 : -1;
+  const dayBeforeCosts: Map<string, number> = dayBeforeYesterdayIndex >= 0
+    ? parseDayCostsByService(mtdResponse, dayBeforeYesterdayIndex)
+    : new Map<string, number>();
+
+  // 前週比データの取得
+  const yesterdayDayOfMonth = yesterday.getUTCDate();
+  let lastWeekCosts: Map<string, number> | null = null;
+
+  if (yesterdayDayOfMonth >= 8) {
+    // 月の8日以降: MTDデータ内に先週同曜日のデータがある
+    const lastWeekIndex = yesterdayIndex - 7;
+    if (lastWeekIndex >= 0) {
+      lastWeekCosts = parseDayCostsByService(mtdResponse, lastWeekIndex);
+    }
+  }
+  else {
+    // 月初(1〜7日): ENABLE_WEEK_OVER_WEEK=true の場合のみ追加APIコール
+    const enableWoW = process.env.ENABLE_WEEK_OVER_WEEK === "true";
+    if (enableWoW) {
+      const sameDayLastWeek = new Date(today);
+      sameDayLastWeek.setUTCDate(today.getUTCDate() - 8);
+      const dayAfterSameDayLastWeek = new Date(today);
+      dayAfterSameDayLastWeek.setUTCDate(today.getUTCDate() - 7);
+
+      const lastWeekResponse = await client.send(new GetCostAndUsageCommand({
+        ...baseParams,
+        TimePeriod: {
+          Start: formatDate(sameDayLastWeek),
+          End: formatDate(dayAfterSameDayLastWeek),
+        },
+      }));
+
+      lastWeekCosts = new Map();
+      const groups = lastWeekResponse.ResultsByTime?.[0]?.Groups ?? [];
+      for (const group of groups) {
+        const serviceName = group.Keys?.[0] ?? "Unknown";
+        const amount = Number.parseFloat(group.Metrics?.UnblendedCost?.Amount ?? "0");
+        lastWeekCosts.set(serviceName, amount);
+      }
+    }
+  }
+
+  // 通貨の特定
+  const currency = yesterdayCosts.size > 0
+    ? (resultsByTime[yesterdayIndex]?.Groups?.[0]?.Metrics?.UnblendedCost?.Unit ?? "USD")
+    : "USD";
+
+  // サービス別コスト（前日比・前週比付き）の構築
   const services: ServiceCost[] = [];
   for (const [serviceName, amount] of yesterdayCosts.entries()) {
     const previousDayAmount = dayBeforeCosts.get(serviceName) ?? 0;
-    const lastWeekAmount = lastWeekCosts.get(serviceName) ?? 0;
+    const lastWeekAmount = lastWeekCosts?.get(serviceName) ?? 0;
     services.push({
       serviceName,
       amount,
       unit: currency,
       dayOverDayChange: calculateChange(amount, previousDayAmount),
-      weekOverWeekChange: calculateChange(amount, lastWeekAmount),
+      weekOverWeekChange: lastWeekCosts !== null
+        ? calculateChange(amount, lastWeekAmount)
+        : null,
     });
   }
 
   services.sort((a, b) => b.amount - a.amount);
 
+  // Top N + Others 集約
   const topServices = services.slice(0, topN);
   const otherServices = services.slice(topN);
 
@@ -131,81 +187,64 @@ export async function getDailyCosts(topN = 5): Promise<CostResult> {
     const previousOthersAmount = otherServices.reduce(
       (sum, s) => sum + (dayBeforeCosts.get(s.serviceName) ?? 0), 0,
     );
-    const lastWeekOthersAmount = otherServices.reduce(
-      (sum, s) => sum + (lastWeekCosts.get(s.serviceName) ?? 0), 0,
-    );
+    const lastWeekOthersAmount = lastWeekCosts !== null
+      ? otherServices.reduce((sum, s) => sum + (lastWeekCosts.get(s.serviceName) ?? 0), 0)
+      : 0;
     topServices.push({
       serviceName: "Others",
       amount: othersAmount,
       unit: currency,
       dayOverDayChange: calculateChange(othersAmount, previousOthersAmount),
-      weekOverWeekChange: calculateChange(othersAmount, lastWeekOthersAmount),
+      weekOverWeekChange: lastWeekCosts !== null
+        ? calculateChange(othersAmount, lastWeekOthersAmount)
+        : null,
     });
   }
 
   const totalAmount = services.reduce((sum, s) => sum + s.amount, 0);
+
+  // 直近7日間の履歴（日付ベースでフィルタリング）
+  const sevenDaysAgoStr = formatDate(sevenDaysAgo);
+  const weeklyHistory: DailyTotal[] = [];
+  const weeklyServiceHistory: DailyServiceBreakdown[] = [];
+
+  for (const day of resultsByTime) {
+    const date = day.TimePeriod?.Start ?? "";
+    if (date < sevenDaysAgoStr || date > yesterdayStr) {
+      continue;
+    }
+    const groups = day.Groups ?? [];
+    const serviceCosts = new Map<string, number>();
+    let dayTotal = 0;
+    for (const g of groups) {
+      const serviceName = g.Keys?.[0] ?? "Unknown";
+      const amount = Number.parseFloat(g.Metrics?.UnblendedCost?.Amount ?? "0");
+      serviceCosts.set(serviceName, amount);
+      dayTotal += amount;
+    }
+    weeklyHistory.push({ date, amount: dayTotal });
+    weeklyServiceHistory.push({ date, services: serviceCosts, total: dayTotal });
+  }
+
+  // 月累計: 当月分のみ合算（クエリが前月に跨る場合を考慮）
+  const monthToDateAmount = resultsByTime.reduce((sum, day) => {
+    const dayDate = day.TimePeriod?.Start ?? "";
+    if (dayDate < monthStartStr) {
+      return sum;
+    }
+    const groups = day.Groups ?? [];
+    return sum + groups.reduce(
+      (daySum, g) => daySum + Number.parseFloat(g.Metrics?.UnblendedCost?.Amount ?? "0"), 0,
+    );
+  }, 0);
 
   return {
     date: yesterdayStr,
     totalAmount,
     services: topServices,
     currency,
+    weeklyHistory,
+    weeklyServiceHistory,
+    monthToDateAmount,
   };
-}
-
-export async function getWeeklyCostHistory(): Promise<DailyTotal[]> {
-  const today = new Date();
-  const sevenDaysAgo = new Date(today);
-  sevenDaysAgo.setUTCDate(today.getUTCDate() - 7);
-
-  const excludeCreditRefundFilter: Expression = {
-    Not: {
-      Dimensions: {
-        Key: "RECORD_TYPE",
-        Values: ["Credit", "Refund"],
-      },
-    },
-  };
-
-  const response = await client.send(new GetCostAndUsageCommand({
-    TimePeriod: { Start: formatDate(sevenDaysAgo), End: formatDate(today) },
-    Granularity: "DAILY",
-    Metrics: ["UnblendedCost"],
-    Filter: excludeCreditRefundFilter,
-  }));
-
-  const dailyTotals: DailyTotal[] = [];
-  for (const day of response.ResultsByTime ?? []) {
-    const date = day.TimePeriod?.Start ?? "";
-    const amount = parseFloat(day.Total?.UnblendedCost?.Amount ?? "0");
-    dailyTotals.push({ date, amount });
-  }
-
-  return dailyTotals;
-}
-
-export async function getMonthToDateCost(): Promise<number> {
-  const today = new Date();
-  const monthStart = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), 1));
-
-  const excludeCreditRefundFilter: Expression = {
-    Not: {
-      Dimensions: {
-        Key: "RECORD_TYPE",
-        Values: ["Credit", "Refund"],
-      },
-    },
-  };
-
-  const response = await client.send(new GetCostAndUsageCommand({
-    TimePeriod: { Start: formatDate(monthStart), End: formatDate(today) },
-    Granularity: "MONTHLY",
-    Metrics: ["UnblendedCost"],
-    Filter: excludeCreditRefundFilter,
-  }));
-
-  const amount = parseFloat(
-    response.ResultsByTime?.[0]?.Total?.UnblendedCost?.Amount ?? "0",
-  );
-  return amount;
 }
