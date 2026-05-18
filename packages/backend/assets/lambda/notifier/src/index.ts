@@ -47,6 +47,11 @@ export const handler: ScheduledHandler = async () => {
       currency: costData.currency,
       jpyRate,
       weeklyHistory: costData.weeklyHistory,
+      weeklyServiceHistory: costData.weeklyServiceHistory.map((d) => ({
+        date: d.date,
+        services: Object.fromEntries(d.services),
+        total: d.total,
+      })),
     });
 
     console.log("Successfully posted daily cost report to Slack");

@@ -23,6 +23,15 @@ const sampleData: SlackCostData = {
     { date: "2024-01-14", amount: 15.00 },
     { date: "2024-01-15", amount: 15.75 },
   ],
+  weeklyServiceHistory: [
+    { date: "2024-01-09", services: { "Amazon EC2": 8.00, "Amazon S3": 4.00 }, total: 12.00 },
+    { date: "2024-01-10", services: { "Amazon EC2": 9.50, "Amazon S3": 5.00 }, total: 14.50 },
+    { date: "2024-01-11", services: { "Amazon EC2": 8.20, "Amazon S3": 5.00 }, total: 13.20 },
+    { date: "2024-01-12", services: { "Amazon EC2": 10.00, "Amazon S3": 6.00 }, total: 16.00 },
+    { date: "2024-01-13", services: { "Amazon EC2": 7.80, "Amazon S3": 4.00 }, total: 11.80 },
+    { date: "2024-01-14", services: { "Amazon EC2": 10.00, "Amazon S3": 5.00 }, total: 15.00 },
+    { date: "2024-01-15", services: { "Amazon EC2": 10.50, "Amazon S3": 5.25 }, total: 15.75 },
+  ],
 };
 
 describe("postToSlack", () => {
@@ -115,7 +124,7 @@ describe("formatSlackMessage", () => {
   });
 
   test("handles empty weekly history without chart", () => {
-    const dataNoHistory: SlackCostData = { ...sampleData, weeklyHistory: [] };
+    const dataNoHistory: SlackCostData = { ...sampleData, weeklyHistory: [], weeklyServiceHistory: [] };
     const result = formatSlackMessage(dataNoHistory);
 
     const imageBlocks = result.blocks.filter((b) => b.type === "image");

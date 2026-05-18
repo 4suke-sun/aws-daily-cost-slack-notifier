@@ -18,12 +18,19 @@ export interface DailyTotal {
   amount: number;
 }
 
+export interface DailyServiceBreakdown {
+  date: string;
+  services: Map<string, number>;
+  total: number;
+}
+
 export interface AllCostData {
   date: string;
   totalAmount: number;
   services: ServiceCost[];
   currency: string;
   weeklyHistory: DailyTotal[];
+  weeklyServiceHistory: DailyServiceBreakdown[];
   monthToDateAmount: number;
 }
 
@@ -46,7 +53,7 @@ function parseDayCostsByService(response: GetCostAndUsageResponse, dayIndex: num
   const groups = response.ResultsByTime?.[dayIndex]?.Groups ?? [];
   for (const group of groups) {
     const serviceName = group.Keys?.[0] ?? "Unknown";
-    const amount = parseFloat(group.Metrics?.UnblendedCost?.Amount ?? "0");
+    const amount = Number.parseFloat(group.Metrics?.UnblendedCost?.Amount ?? "0");
     costs.set(serviceName, amount);
   }
   return costs;
@@ -64,8 +71,7 @@ export async function getAllCostData(topN = 5): Promise<AllCostData> {
   const yesterdayStr = formatDate(yesterday);
   const monthStartStr = formatDate(monthStart);
 
-  // Query start must cover both yesterday and at least 7 days back for weekly history.
-  // Use min(monthStart, 7-days-ago) to ensure we always have up to 7 days of data.
+  // クエリ開始日: 月初と7日前の早い方を使い、常に7日分のデータを確保
   const sevenDaysAgo = new Date(today);
   sevenDaysAgo.setUTCDate(today.getUTCDate() - 7);
   const queryStart = monthStart <= sevenDaysAgo ? monthStart : sevenDaysAgo;
@@ -87,7 +93,7 @@ export async function getAllCostData(topN = 5): Promise<AllCostData> {
     Filter: excludeCreditRefundFilter,
   };
 
-  // Single MTD query (month-start to today, or yesterday to today if today is the 1st)
+  // 1回のAPIコールで月初(or 7日前)〜今日までのデータを取得
   const mtdResponse = await client.send(new GetCostAndUsageCommand({
     ...baseParams,
     TimePeriod: { Start: queryStartStr, End: todayStr },
@@ -95,41 +101,37 @@ export async function getAllCostData(topN = 5): Promise<AllCostData> {
 
   const resultsByTime = mtdResponse.ResultsByTime ?? [];
 
-  // Find yesterday's index in the results
+  // 昨日のインデックスを特定
   const yesterdayIndex = resultsByTime.findIndex(
     (r) => r.TimePeriod?.Start === yesterdayStr,
   );
 
-  // Parse yesterday's costs
+  // 昨日のサービス別コスト
   const yesterdayCosts: Map<string, number> = yesterdayIndex >= 0
     ? parseDayCostsByService(mtdResponse, yesterdayIndex)
     : new Map<string, number>();
 
-  // Parse day-before-yesterday's costs.
-  // dayOverDayChange is null only when yesterday is the first entry in the results (index 0),
-  // which should not happen with the 7-day lookback. The Slack formatter displays a dash
-  // character for null changes as a fallback.
+  // 一昨日のサービス別コスト（前日比計算用）
   const dayBeforeYesterdayIndex = yesterdayIndex > 0 ? yesterdayIndex - 1 : -1;
   const dayBeforeCosts: Map<string, number> = dayBeforeYesterdayIndex >= 0
     ? parseDayCostsByService(mtdResponse, dayBeforeYesterdayIndex)
     : new Map<string, number>();
 
-  // Determine week-over-week comparison data
+  // 前週比データの取得
   const yesterdayDayOfMonth = yesterday.getUTCDate();
   let lastWeekCosts: Map<string, number> | null = null;
 
   if (yesterdayDayOfMonth >= 8) {
-    // Same weekday last week is within MTD data (8 days before yesterday = yesterday index - 7)
+    // 月の8日以降: MTDデータ内に先週同曜日のデータがある
     const lastWeekIndex = yesterdayIndex - 7;
     if (lastWeekIndex >= 0) {
       lastWeekCosts = parseDayCostsByService(mtdResponse, lastWeekIndex);
     }
   }
   else {
-    // Early month: check ENABLE_WEEK_OVER_WEEK env var
+    // 月初(1〜7日): ENABLE_WEEK_OVER_WEEK=true の場合のみ追加APIコール
     const enableWoW = process.env.ENABLE_WEEK_OVER_WEEK === "true";
     if (enableWoW) {
-      // Make one additional API call for the same day last week
       const sameDayLastWeek = new Date(today);
       sameDayLastWeek.setUTCDate(today.getUTCDate() - 8);
       const dayAfterSameDayLastWeek = new Date(today);
@@ -147,18 +149,18 @@ export async function getAllCostData(topN = 5): Promise<AllCostData> {
       const groups = lastWeekResponse.ResultsByTime?.[0]?.Groups ?? [];
       for (const group of groups) {
         const serviceName = group.Keys?.[0] ?? "Unknown";
-        const amount = parseFloat(group.Metrics?.UnblendedCost?.Amount ?? "0");
+        const amount = Number.parseFloat(group.Metrics?.UnblendedCost?.Amount ?? "0");
         lastWeekCosts.set(serviceName, amount);
       }
     }
   }
 
-  // Determine currency
+  // 通貨の特定
   const currency = yesterdayCosts.size > 0
     ? (resultsByTime[yesterdayIndex]?.Groups?.[0]?.Metrics?.UnblendedCost?.Unit ?? "USD")
     : "USD";
 
-  // Build service costs with changes
+  // サービス別コスト（前日比・前週比付き）の構築
   const services: ServiceCost[] = [];
   for (const [serviceName, amount] of yesterdayCosts.entries()) {
     const previousDayAmount = dayBeforeCosts.get(serviceName) ?? 0;
@@ -176,7 +178,7 @@ export async function getAllCostData(topN = 5): Promise<AllCostData> {
 
   services.sort((a, b) => b.amount - a.amount);
 
-  // Top N + Others aggregation
+  // Top N + Others 集約
   const topServices = services.slice(0, topN);
   const otherServices = services.slice(topN);
 
@@ -201,20 +203,30 @@ export async function getAllCostData(topN = 5): Promise<AllCostData> {
 
   const totalAmount = services.reduce((sum, s) => sum + s.amount, 0);
 
-  // Weekly history: last 7 days of daily totals from the MTD response
+  // 直近7日間の履歴（日付ベースでフィルタリング）
+  const sevenDaysAgoStr = formatDate(sevenDaysAgo);
   const weeklyHistory: DailyTotal[] = [];
-  const last7Start = Math.max(0, resultsByTime.length - 7);
-  for (let i = last7Start; i < resultsByTime.length; i++) {
-    const day = resultsByTime[i];
+  const weeklyServiceHistory: DailyServiceBreakdown[] = [];
+
+  for (const day of resultsByTime) {
     const date = day.TimePeriod?.Start ?? "";
+    if (date < sevenDaysAgoStr || date > yesterdayStr) {
+      continue;
+    }
     const groups = day.Groups ?? [];
-    const dayTotal = groups.reduce(
-      (sum, g) => sum + parseFloat(g.Metrics?.UnblendedCost?.Amount ?? "0"), 0,
-    );
+    const serviceCosts = new Map<string, number>();
+    let dayTotal = 0;
+    for (const g of groups) {
+      const serviceName = g.Keys?.[0] ?? "Unknown";
+      const amount = Number.parseFloat(g.Metrics?.UnblendedCost?.Amount ?? "0");
+      serviceCosts.set(serviceName, amount);
+      dayTotal += amount;
+    }
     weeklyHistory.push({ date, amount: dayTotal });
+    weeklyServiceHistory.push({ date, services: serviceCosts, total: dayTotal });
   }
 
-  // Month-to-date total: sum only days that belong to the current month (>= monthStart)
+  // 月累計: 当月分のみ合算（クエリが前月に跨る場合を考慮）
   const monthToDateAmount = resultsByTime.reduce((sum, day) => {
     const dayDate = day.TimePeriod?.Start ?? "";
     if (dayDate < monthStartStr) {
@@ -222,7 +234,7 @@ export async function getAllCostData(topN = 5): Promise<AllCostData> {
     }
     const groups = day.Groups ?? [];
     return sum + groups.reduce(
-      (daySum, g) => daySum + parseFloat(g.Metrics?.UnblendedCost?.Amount ?? "0"), 0,
+      (daySum, g) => daySum + Number.parseFloat(g.Metrics?.UnblendedCost?.Amount ?? "0"), 0,
     );
   }, 0);
 
@@ -232,6 +244,7 @@ export async function getAllCostData(topN = 5): Promise<AllCostData> {
     services: topServices,
     currency,
     weeklyHistory,
+    weeklyServiceHistory,
     monthToDateAmount,
   };
 }
