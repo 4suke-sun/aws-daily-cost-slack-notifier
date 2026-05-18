@@ -71,10 +71,11 @@ exports[`AwsDailyCostSlackNotifierStackのデフォルト生成のテスト > Sn
           "S3Bucket": {
             "Fn::Sub": "cdk-hnb659fds-assets-\${AWS::AccountId}-\${AWS::Region}",
           },
-          "S3Key": "6ab170673ccdedaa5adc5511d60dd9ee7e7eaf5bba7ac4beb0e69c592d4e304c.zip",
+          "S3Key": "1c7388a25fef8a990796176c079b501a6fab53a11c29d65f043a676d3e17ee38.zip",
         },
         "Environment": {
           "Variables": {
+            "ENABLE_WEEK_OVER_WEEK": "false",
             "SSM_PARAMETER_PATH": "/daily-cost-notifier/slack-webhook-url",
             "TOP_N": "5",
           },
