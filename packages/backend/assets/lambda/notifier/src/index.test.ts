@@ -15,18 +15,26 @@ const noop: Callback = () => { return; };
 const fakeContext = {} as Context;
 const fakeEvent = {} as never;
 
-function buildCostResponse(services: Record<string, string>): GetCostAndUsageResponse {
-  return {
-    ResultsByTime: [{
-      TimePeriod: { Start: "2024-01-14", End: "2024-01-15" },
+/**
+ * Build a multi-day MTD response. Today is set to Jan 15, so we need data from Jan 1-14.
+ */
+function buildMultiDayCostResponse(services: Record<string, string>): GetCostAndUsageResponse {
+  const days = [];
+  for (let d = 1; d <= 14; d++) {
+    const dateStr = `2024-01-${String(d).padStart(2, "0")}`;
+    const nextDay = d + 1;
+    const endStr = `2024-01-${String(nextDay).padStart(2, "0")}`;
+    days.push({
+      TimePeriod: { Start: dateStr, End: endStr },
       Groups: Object.entries(services).map(([name, amount]) => ({
         Keys: [name],
         Metrics: {
           UnblendedCost: { Amount: amount, Unit: "USD" },
         },
       })),
-    }],
-  };
+    });
+  }
+  return { ResultsByTime: days };
 }
 
 function mockFetchSuccess() {
@@ -45,11 +53,14 @@ describe("handler", () => {
   beforeEach(() => {
     ssmMock.reset();
     ceMock.reset();
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2024-01-15T12:00:00Z"));
     vi.stubEnv("SSM_PARAMETER_PATH", "/test/slack-webhook");
     vi.stubEnv("TOP_N", "3");
   });
 
   afterEach(() => {
+    vi.useRealTimers();
     vi.restoreAllMocks();
     vi.unstubAllEnvs();
   });
@@ -58,7 +69,7 @@ describe("handler", () => {
     ssmMock.on(GetParameterCommand).resolves({
       Parameter: { Value: "https://hooks.slack.com/services/test" },
     });
-    ceMock.on(GetCostAndUsageCommand).resolves(buildCostResponse({
+    ceMock.on(GetCostAndUsageCommand).resolves(buildMultiDayCostResponse({
       "Amazon EC2": "10.00",
       "Amazon S3": "5.00",
       "AWS Lambda": "3.00",
@@ -93,7 +104,7 @@ describe("handler", () => {
 
   test("SSM の Parameter.Value が空の場合エラーが伝搬する", async () => {
     ssmMock.on(GetParameterCommand).resolves({ Parameter: { Value: undefined } });
-    ceMock.on(GetCostAndUsageCommand).resolves(buildCostResponse({}));
+    ceMock.on(GetCostAndUsageCommand).resolves(buildMultiDayCostResponse({}));
     mockFetchSuccess();
 
     await expect(handler(fakeEvent, fakeContext, noop)).rejects.toThrow(
@@ -115,7 +126,7 @@ describe("handler", () => {
     ssmMock.on(GetParameterCommand).resolves({
       Parameter: { Value: "https://hooks.slack.com/services/test" },
     });
-    ceMock.on(GetCostAndUsageCommand).resolves(buildCostResponse({ "Amazon EC2": "10.00" }));
+    ceMock.on(GetCostAndUsageCommand).resolves(buildMultiDayCostResponse({ "Amazon EC2": "10.00" }));
 
     vi.stubGlobal("fetch", vi.fn().mockImplementation((url: string) => {
       if (url.includes("exchangerate")) {
