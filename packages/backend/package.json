@@ -12,7 +12,7 @@
     "assets:lint": "eslint ./assets/lambda/** --ext ts"
   },
   "devDependencies": {
-    "@eslint/js": "^9.23.0",
+    "@eslint/js": "^10.0.1",
     "@types/aws-lambda": "^8.10.149",
     "@types/node": "22.x",
     "aws-cdk": "^2.1122.0",
