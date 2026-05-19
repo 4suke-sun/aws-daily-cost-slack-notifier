@@ -1,7 +1,7 @@
 import eslintJs from "@eslint/js";
 import stylistic from "@stylistic/eslint-plugin";
 import gitignore from "eslint-config-flat-gitignore";
-import importPlugin from "eslint-plugin-import";
+import importPlugin from "eslint-plugin-import-x";
 import unusedImportsPlugin from "eslint-plugin-unused-imports";
 import globals from "globals";
 import tseslint from "typescript-eslint";
@@ -21,7 +21,7 @@ export default [
       "@stylistic": stylistic,
     },
     settings: {
-      "import/resolver": {
+      "import-x/resolver": {
         typescript: {
           alwaysTryTypes: true,
           project: "packages/*/tsconfig.json",
@@ -109,9 +109,9 @@ export default [
         "named": "never",
         "asyncArrow": "always",
       }],
-      "import/default": "off",
-      "import/namespace": "off",
-      "import/order": ["error", {
+      "import-x/default": "off",
+      "import-x/namespace": "off",
+      "import-x/order": ["error", {
         "groups": [
           "builtin",
           "external",
@@ -128,7 +128,7 @@ export default [
           "caseInsensitive": false,
         },
       }],
-      "import/no-duplicates": "error",
+      "import-x/no-duplicates": "error",
       "unused-imports/no-unused-imports": "error",
     },
   },
