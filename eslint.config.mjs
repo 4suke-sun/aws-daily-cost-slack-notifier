@@ -151,7 +151,10 @@ export default [
       languageOptions: {
         parserOptions: {
           "ecmaVersion": "latest",
-          "project": true,
+          "project": [
+            "packages/backend/tsconfig.json",
+            "packages/backend/assets/lambda/notifier/tsconfig.json",
+          ],
         },
       },
       extends: [
