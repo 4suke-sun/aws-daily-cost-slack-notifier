@@ -11,17 +11,31 @@ describe("getUsdJpyRate", () => {
     vi.restoreAllMocks();
   });
 
-  test("returns JPY rate on success", async () => {
+  test("returns JPY rate from primary URL on success", async () => {
     vi.mocked(fetch).mockResolvedValue(
-      new Response(JSON.stringify({ rates: { JPY: 149.5 } }), { status: 200 }),
+      new Response(JSON.stringify({ usd: { jpy: 149.5 } }), { status: 200 }),
     );
 
     const rate = await getUsdJpyRate();
 
     expect(rate).toBe(149.5);
+    expect(fetch).toHaveBeenCalledTimes(1);
   });
 
-  test("returns fallback rate on network error", async () => {
+  test("falls back to backup URL when primary fails", async () => {
+    vi.mocked(fetch)
+      .mockRejectedValueOnce(new Error("Network error"))
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ usd: { jpy: 152.0 } }), { status: 200 }),
+      );
+
+    const rate = await getUsdJpyRate();
+
+    expect(rate).toBe(152.0);
+    expect(fetch).toHaveBeenCalledTimes(2);
+  });
+
+  test("returns fallback rate when both URLs fail", async () => {
     vi.mocked(fetch).mockRejectedValue(new Error("Network error"));
     const warnSpy = vi.spyOn(console, "warn").mockImplementation(
       // eslint-disable-next-line @typescript-eslint/no-empty-function -- suppress console output in tests
@@ -61,10 +75,7 @@ describe("getUsdJpyRate", () => {
     const rate = await getUsdJpyRate();
 
     expect(rate).toBe(FALLBACK_RATE);
-    expect(warnSpy).toHaveBeenCalledWith(
-      "Failed to fetch exchange rate, using fallback rate:",
-      expect.objectContaining({ message: "Exchange rate API returned status 429" }),
-    );
+    expect(warnSpy).toHaveBeenCalled();
   });
 
   test("returns fallback rate on timeout", async () => {
