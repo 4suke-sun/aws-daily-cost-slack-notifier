@@ -100,7 +100,7 @@ export default [
       }],
       "@stylistic/quotes": ["warn", "double", {
         "avoidEscape": true,
-        "allowTemplateLiterals": true,
+        "allowTemplateLiterals": "always",
       }],
       "@stylistic/semi": ["error", "always"],
       "@stylistic/space-before-blocks": ["error", "always"],
