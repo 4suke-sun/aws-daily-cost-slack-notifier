@@ -42,6 +42,7 @@ export const handler: ScheduledHandler = async () => {
         dayOverDayChange: s.dayOverDayChange,
         weekOverWeekChange: s.weekOverWeekChange,
       })),
+      topN,
       totalAmount: costData.totalAmount,
       monthToDateAmount: costData.monthToDateAmount,
       currency: costData.currency,
