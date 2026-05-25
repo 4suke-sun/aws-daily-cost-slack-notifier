@@ -19,6 +19,7 @@ export interface SlackDailyServiceBreakdown {
 export interface SlackCostData {
   date: string;
   services: SlackServiceData[];
+  topN: number;
   totalAmount: number;
   monthToDateAmount: number;
   currency: string;
@@ -81,21 +82,34 @@ const CHART_COLORS = [
 
 function buildStackedChartUrl(
   history: SlackDailyServiceBreakdown[],
-  topServices: SlackServiceData[],
+  topN: number,
 ): string {
   const labels = history.map((d) => formatDateJp(d.date));
 
-  // topServicesの順序でデータセットを構築（Othersを含む）
-  const serviceNames = topServices.map((s) => s.name);
+  // 表示期間(7日間)全体のサービス別合計コストを集計してTop Nを決定
+  // → 「昨日はゼロだが過去に高額だったサービス」もグラフ凡例に正しく表示するため
+  const periodTotals = new Map<string, number>();
+  for (const day of history) {
+    for (const [name, amount] of Object.entries(day.services)) {
+      periodTotals.set(name, (periodTotals.get(name) ?? 0) + amount);
+    }
+  }
+  const topServiceNames = [...periodTotals.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, topN)
+    .map(([name]) => name);
 
-  const datasets = serviceNames.map((name, idx) => {
+  // Top Nサービス + Othersのデータセットを構築
+  const allNames = [...topServiceNames, "Others"];
+
+  const datasets = allNames.map((name, idx) => {
     const data = history.map((day) => {
       if (name === "Others") {
-        // Others = 日の合計 - topサービス(Others以外)の合計
-        const topSum = serviceNames
-          .filter((n) => n !== "Others")
-          .reduce((sum, n) => sum + (day.services[n] ?? 0), 0);
-        return Math.round((day.total - topSum) * 100) / 100;
+        // Others = その日のサービスのうち、期間Top Nに含まれないものの合計
+        const othersAmount = Object.entries(day.services)
+          .filter(([n]) => !topServiceNames.includes(n))
+          .reduce((sum, [, v]) => sum + v, 0);
+        return Math.round(othersAmount * 100) / 100;
       }
       return Math.round((day.services[name] ?? 0) * 100) / 100;
     });
@@ -146,7 +160,7 @@ export function formatSlackMessage(data: SlackCostData) {
   if (data.weeklyServiceHistory.length > 0) {
     blocks.push({
       type: "image",
-      image_url: buildStackedChartUrl(data.weeklyServiceHistory, data.services),
+      image_url: buildStackedChartUrl(data.weeklyServiceHistory, data.topN),
       alt_text: "過去7日間のサービス別コスト推移グラフ",
     });
   }
@@ -158,7 +172,7 @@ export function formatSlackMessage(data: SlackCostData) {
     type: "section",
     text: {
       type: "mrkdwn",
-      text: "*\u{1F4CB} サービス別内訳*",
+      text: `*\u{1F4CB} サービス別内訳（前日利用料 上位${data.topN}件）*`,
     },
   });
 
